@@ -9,11 +9,12 @@ class Factual
     DRIVER_VERSION_TAG = "factual-ruby-driver-v" + VERSION
     PARAM_ALIASES = { :search => :q, :sort_asc => :sort }
 
-    def initialize(access_token, debug_mode = false, host = nil, timeout = nil)
+    def initialize(access_token, debug_mode = false, host = nil, timeout = nil, retries = 1)
       @access_token = access_token
       @debug_mode = debug_mode
       @timeout = timeout
       @host = host || API_V3_HOST
+      @retries = retries
     end
 
     def get(query, other_params = {})
@@ -105,18 +106,32 @@ class Factual
 
       headers = { "X-Factual-Lib" => DRIVER_VERSION_TAG }
 
-      res = if (method == :get)
-              Timeout::timeout(@timeout){ @access_token.get(url, headers) }
-            elsif (method == :post)
-              Timeout::timeout(@timeout){ @access_token.post(url, body, headers) }
-            else
-              raise StandardError.new("Unknown http method")
-            end
-
+      res = retry_before_exception(Timeout::Error) do
+        if (method == :get)
+          Timeout::timeout(@timeout){ @access_token.get(url, headers) }
+        elsif (method == :post)
+          Timeout::timeout(@timeout){ @access_token.post(url, body, headers) }
+        else
+          raise StandardError.new("Unknown http method")
+        end
+      end
       elapsed_time = (Time.now - start_time) * 1000
       debug(url, method, headers, body, res, elapsed_time) if @debug_mode
 
       res
+    end
+
+    def retry_before_exception(exception, &block)
+      current = 0
+      begin
+        return block.call
+      rescue exception
+        if (current += 1) >= @retries
+          raise exception
+        else
+          retry
+        end
+      end
     end
 
     def query_string(params)

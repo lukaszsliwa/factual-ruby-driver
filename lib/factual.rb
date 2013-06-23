@@ -21,7 +21,8 @@ class Factual
     debug_mode = options[:debug].nil? ? false : options[:debug]
     host = options[:host]
     timeout = options[:timeout]
-    @api = API.new(generate_token(key, secret), debug_mode, host, timeout)
+    retries = options[:retries] || 1
+    @api = API.new(generate_token(key, secret), debug_mode, host, timeout, retries)
   end
 
   def table(table_id_or_alias)
